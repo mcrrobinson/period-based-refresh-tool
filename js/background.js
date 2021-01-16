@@ -104,7 +104,7 @@ function get_rand_time(tmin, tmax) {
     return rand_time;
 }
 
-function loop_start(waitTime, interval_time, interval_type, checkme, page_monitor_pattern, predefined_url) {
+function loop_start(interval_time, interval_type, working_range, checkme, page_monitor_pattern, predefined_url) {
 
     getCurrentTab(function(tab) {
         var currentTabId = tab.id;
@@ -129,8 +129,6 @@ function loop_start(waitTime, interval_time, interval_type, checkme, page_monito
             var min_max_arr = interval_time.split("-");
             var interval_time_tmp = get_rand_time(min_max_arr[0], min_max_arr[1]);
             tabs[currentTabId]['time_between_load'] = interval_time_tmp * 1000;
-        } else {
-            tabs[currentTabId]['time_between_load'] = interval_time;
         }
         tabs[currentTabId]['time_type'] = interval_type;
         tabs[currentTabId]['next_round'] = tabs[currentTabId]['time_between_load'] / 1000;
@@ -143,39 +141,12 @@ function loop_start(waitTime, interval_time, interval_type, checkme, page_monito
 
         tabs[currentTabId]['count'] = 0;
         var the_action_url = tabs[currentTabId]['action_url'];
-        if (waitTime == -1) {
-            tabs[currentTabId]['status'] = 'start';
-            tabs[currentTabId]['wait_time'] = 0;
-            tabs[currentTabId]['wait_next_round'] = 0;
+        tabs[currentTabId]['status'] = 'start';
+        tabs[currentTabId]['wait_time'] = 0;
+        tabs[currentTabId]['wait_next_round'] = 0;
+        tabs[currentTabId]['range'] = working_range;
 
-            if (tabs[currentTabId].displayTimer) {
-                stopBadgeTimer(currentTabId);
-            }
-            real_start(currentTabId, the_action_url);
-        } else {
-            tabs[currentTabId]['wait_time'] = waitTime;
-            var timeDelay = 0;
-
-            //Timer mode 2
-            if (waitTime.toString().search(" ") > 0) {
-                tabs[currentTabId]['status'] = 'wait';
-                timeDelay = (new Date(waitTime)).getTime() - (new Date()).getTime();
-                tabs[currentTabId]['wait_next_round'] = Math.floor(timeDelay / 1000);
-                //Timer mode 1
-            } else {
-                tabs[currentTabId]['status'] = 'wait';
-                timeDelay = waitTime;
-                tabs[currentTabId]['wait_next_round'] = waitTime / 1000;
-            }
-
-            tabs[currentTabId].displayTimer = window.setInterval(function(tabId) {
-                tabs[tabId].wait_next_round--;
-                setTimerBadgeText(tabId);
-            }, 1000, currentTabId);
-            setTimeout(function() {
-                real_start(currentTabId, the_action_url)
-            }, timeDelay);
-        }
+        real_start(currentTabId, the_action_url);
     });
 }
 
@@ -426,62 +397,70 @@ function pause_sound_with_fadeout(sound) {
 }
 
 function reload_it(tabId, tab_url) {
+    var d = new Date();
+    var hour = d.getHours();
+    if (hour < tabs[tabId]['range'].valueHigh && hour > tabs[tabId]['range'].valueLow) {
+        if (tabs[tabId]['checkme']) {
+            var check_content = tabs[tabId]['checkme'];
+            var pmpattern = tabs[tabId]['pmpattern'];
 
-    if (tabs[tabId]['checkme']) {
-        var check_content = tabs[tabId]['checkme'];
-        var pmpattern = tabs[tabId]['pmpattern'];
-
-        if (tabs[tabId]['count'] == 0) {
-            updateTab(tabId, tab_url);
-        } else {
-            chrome.tabs.sendMessage(tabId, {
-                checkme: check_content,
-                pattern: pmpattern
-            }, function(response) {
-                if (response.findresult == "yes") {
-                    reload_cancel(tabId, 'yes');
-                    // notification & tab handling
-                    chrome.tabs.get(tabId, function(tab) {
-                        chrome.windows.getLastFocused({}, function(lastFocusedWindow) {
-                            // draw attention to target window if it's not focused inside Chrome
-                            // (or not focused at all) and switch to the target tab
-                            if (lastFocusedWindow.id != tab.windowId || !lastFocusedWindow.focused) {
-                                chrome.windows.update(tab.windowId, {
-                                    drawAttention: true
-                                });
-                                chrome.tabs.update(tabId, {
-                                    active: true
-                                });
-                            }
-                            // show notification box
-                            show_notification(pmpattern, check_content, function() {
-                                // switch to target tab & its window upon clicking the box
-                                chrome.tabs.update(tabId, {
-                                    active: true
-                                });
-                                chrome.windows.update(tab.windowId, {
-                                    focused: true
+            if (tabs[tabId]['count'] == 0) {
+                updateTab(tabId, tab_url);
+            } else {
+                chrome.tabs.sendMessage(tabId, {
+                    checkme: check_content,
+                    pattern: pmpattern
+                }, function(response) {
+                    if (response.findresult == "yes") {
+                        reload_cancel(tabId, 'yes');
+                        // notification & tab handling
+                        chrome.tabs.get(tabId, function(tab) {
+                            chrome.windows.getLastFocused({}, function(lastFocusedWindow) {
+                                // draw attention to target window if it's not focused inside Chrome
+                                // (or not focused at all) and switch to the target tab
+                                if (lastFocusedWindow.id != tab.windowId || !lastFocusedWindow.focused) {
+                                    chrome.windows.update(tab.windowId, {
+                                        drawAttention: true
+                                    });
+                                    chrome.tabs.update(tabId, {
+                                        active: true
+                                    });
+                                }
+                                // show notification box
+                                show_notification(pmpattern, check_content, function() {
+                                    // switch to target tab & its window upon clicking the box
+                                    chrome.tabs.update(tabId, {
+                                        active: true
+                                    });
+                                    chrome.windows.update(tab.windowId, {
+                                        focused: true
+                                    });
                                 });
                             });
                         });
-                    });
-                } else {
-                    chrome.browserAction.setBadgeText({
-                        text: '',
-                        tabId: tabId
-                    });
-                    updateTab(tabId, tab_url);
-                }
+                    } else {
+                        chrome.browserAction.setBadgeText({
+                            text: '',
+                            tabId: tabId
+                        });
+                        updateTab(tabId, tab_url);
+                    }
+                });
+            }
+        } else {
+            chrome.browserAction.setBadgeText({
+                text: '',
+                tabId: tabId
             });
+            updateTab(tabId, tab_url);
         }
+        tabs[tabId]['count']++;
     } else {
         chrome.browserAction.setBadgeText({
-            text: '',
+            text: 'Sleep',
             tabId: tabId
         });
-        updateTab(tabId, tab_url);
     }
-    tabs[tabId]['count']++;
 }
 
 function reload_cancel(tabId, content_detect) {

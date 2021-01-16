@@ -6,8 +6,11 @@ ready(() => {
 
 function get_interval() {
     var time_result = []
-    time_result[0] = getId('minValue').value + "-" + getId('maxValue').value;
+    avgRefreshes = Number(getId('avgRefresh').value) * 3600;
+    noiseRating = Number(getId('noiseRating').value) / 10;
+    time_result[0] = ((1 - noiseRating) * avgRefreshes) + "-" + ((1 + noiseRating) * avgRefreshes);
     time_result[1] = "rand";
+    time_result[2] = getId('workingPeriodRange');
     return time_result;
 }
 
@@ -23,7 +26,7 @@ function startRefresh() {
 
         for (var i in views) {
             if (views[i].loop_start) {
-                views[i].loop_start(-1, myInterval[0], myInterval[1], null, null, preurl);
+                views[i].loop_start(myInterval[0], myInterval[1], myInterval[2], null, null, preurl);
             }
         }
     } else {
