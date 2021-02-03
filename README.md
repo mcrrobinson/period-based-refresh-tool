@@ -1,3 +1,2 @@
-# Depop Autorefresh
-
-Auto refresh tool for auto refreshing listings on depop within a certain time period. With the addition of a noise calculator.
+# Period Based Refresh Tool
+Auto refresh tool that refreshes within a period with the addition of a noise calc.
